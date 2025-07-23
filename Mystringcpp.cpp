@@ -3,10 +3,10 @@ private:
     int length;
 
 public:
-    // ¹¹Ôìº¯Êı
+    // æ„é€ å‡½æ•°
     MyString() : str(nullptr), length(0) {
-        str = new char[1];  // ÕıÈ··ÖÅä1×Ö½ÚÄÚ´æ
-        str[0] = '\0';      // ÕıÈ·ÉèÖÃ¿Õ×Ö·û´®
+        str = new char[1];  
+        str[0] = '\0';      
     }
 
     MyString(const char* s) {
@@ -14,20 +14,14 @@ public:
         str = new char[length + 1];
         strcpy(str, s);
     }
-
-    // ¿½±´¹¹Ôìº¯Êı
     MyString(const MyString& other) {
         length = other.length;
         str = new char[length + 1];
         strcpy(str, other.str);
     }
-
-    // Îö¹¹º¯Êı
     ~MyString() {
         delete[] str;
     }
-
-    // ÖØÔØ¸³ÖµÔËËã·û
     MyString& operator=(const MyString& other) {
         if (this != &other) {
             delete[] str;
@@ -37,8 +31,6 @@ public:
         }
         return *this;
     }
-
-    // ÖØÔØ+ÔËËã·û
     MyString operator+(const MyString& other) const {
         MyString newStr;
         newStr.length = length + other.length;
@@ -47,14 +39,10 @@ public:
         strcat(newStr.str, other.str);
         return newStr;
     }
-
-    // ÓÑÔªº¯ÊıÊµÏÖ×Ö·û´®×ÖÃæÁ¿+MyString
     friend MyString operator+(const char* lhs, const MyString& rhs) {
         MyString temp(lhs);
         return temp + rhs;
     }
-
-    // ÖØÔØ+=ÔËËã·û
     MyString& operator+=(const MyString& other) {
         char* temp = new char[length + other.length + 1];
         strcpy(temp, str);
@@ -64,19 +52,13 @@ public:
         length += other.length;
         return *this;
     }
-
-    // ÖØÔØ[]ÔËËã·û
     char& operator[](int index) {
         return str[index];
     }
-
-    // ÖØÔØ<<ÔËËã·û
     friend ostream& operator<<(ostream& os, const MyString& s) {
         os << s.str;
         return os;
     }
-
-    // ÖØÔØ±È½ÏÔËËã·û
     bool operator<(const MyString& other) const {
         return strcmp(str, other.str) < 0;
     }
@@ -88,8 +70,6 @@ public:
     bool operator>(const MyString& other) const {
         return strcmp(str, other.str) > 0;
     }
-
-    // ×Ó´®º¯Êı
     MyString operator()(int start, int len) const {
         MyString sub;
         sub.length = len;
