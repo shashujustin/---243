@@ -1,0 +1,173 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+using namespace std;
+using namespace cv;
+
+// 先定义全局变量
+Mat img, src;
+Point2i center(458, 414); // R标中心点
+
+// 鼠标回调函数，用于设置R标中心,R为红色.
+void onMouse(int event, int x, int y, int flags, void* userdata) {
+    if (event == EVENT_LBUTTONDOWN) {
+        center = Point2i(x, y);
+        cout << "R标中心设置为: (" << x << ", " << y << ")" << endl;
+    }
+}
+
+void markred(Mat src) {
+    Mat hsv, mask1, mask2, dst1, dst2;
+    // 先转换为HSV图
+    cvtColor(src, hsv, COLOR_BGR2HSV);
+    // 二值化图像，阈值为红色域
+    inRange(hsv, Scalar(156, 43, 46), Scalar(180, 255, 255), mask1);
+    // 二值化图像，阈值为红色域
+    inRange(hsv, Scalar(0, 43, 46), Scalar(10, 255, 255), mask2);
+    add(mask1, mask2, dst1);
+    Mat element = getStructuringElement(MORPH_RECT, Size(5, 5));
+    morphologyEx(dst1, dst2, MORPH_OPEN, element);
+
+    vector<vector<Point>> contours; 
+    vector<Vec4i> hierarchy;  
+    // 提取所有轮廓并建立网状轮廓结构
+    findContours(dst2, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE, Point(0, 0));
+
+    // 通过遍历操作,数出每一个父轮廓里有几个子轮廓
+    vector<int> contour(contours.size(), 0);
+    for (int i = 0; i < contours.size(); i++) {
+        if (hierarchy[i][3] != -1) // 有内嵌轮廓,说明是一个父轮廓
+            contour[hierarchy[i][3]]++;
+    }
+
+    // 确定R的坐标,并用红色标记
+    circle(src, center, 9, Scalar(0, 0, 255), 2); // 红色
+    putText(src, "R", Point(center.x + 10, center.y), FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 255), 2);
+
+    // 在之前的基础上再遍历一次,这次来识别是击打过的框还是将要击打的框
+    for (int j = 0; j < contours.size(); j++) {
+        if (contour[j] == 1) {
+            int num = hierarchy[j][2]; // 记录该轮廓的内嵌轮廓
+            // RotatedRect表示一个旋转矩形的类   成员变量:矩形的中心点,宽度和高度,旋转角度.
+            RotatedRect box = minAreaRect(contours[num]); // 包含该轮廓所有点
+            Point2f vertex[4];
+            box.points(vertex); // 将左下角，左上角，右上角，右下角存入点集
+
+            // 计算左下角和右上角的中点坐标以及到R标中心的距离
+            Point2f topleft(vertex[0].x, vertex[0].y);
+            Point2f bottomright(vertex[2].x, vertex[2].y);
+            Point2f midpoint((topleft.x + bottomright.x) / 2, (topleft.y + bottomright.y) / 2);
+            double distance = sqrt(powf((midpoint.x - center.x), 2) + powf((midpoint.y - center.y), 2));
+
+            // 先绘制轮廓的最小外接矩形
+            // 然后通过距离筛选只绘制外围的矩形
+            if (distance > 100.0) {
+                for (int i = 0; i < 4; i++) {
+                    line(src, vertex[i], vertex[(i + 1) % 4], Scalar(0, 255, 0), 4, LINE_AA);
+                }
+                
+                // 先要绘制围绕矩形中心的圆
+                circle(src, midpoint, 40, Scalar(255, 255, 0), 2); // 青色圆
+                
+                // 绘制中心点到圆周的连线
+                for (int i = 0; i < 8; i++) {
+                    double angle = i * CV_PI / 4;
+                    Point2f edge(
+                        midpoint.x + 40 * cos(angle),
+                        midpoint.y + 40 * sin(angle)
+                    );
+                    line(src, midpoint, edge, Scalar(0, 255, 255), 2); // 黄色连线
+                }
+                
+                // 标记中心点
+                circle(src, midpoint, 6, Scalar(0, 255, 0), -1); 
+                
+                // 显示距离信息
+                string dist_text = "Dist: " + to_string((int)distance);
+                putText(src, dist_text, Point(midpoint.x + 10, midpoint.y + 20), 
+                        FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0), 1);
+            }
+        }
+    }
+
+    // 显示统计信息
+    string info = "R Center: (" + to_string(center.x) + ", " + to_string(center.y) + ")";
+    putText(src, info, Point(10, 30), FONT_HERSHEY_SIMPLEX, 0.7, Scalar(255, 255, 255), 2);
+
+    // 释放内存
+    hsv.release();
+    mask1.release();
+    mask2.release();
+    dst1.release();
+    dst2.release();
+}
+
+int main() {
+    string path = "/home/justin/Videos/energevideo.mp4";
+    VideoCapture cap(path);
+
+    if (!cap.isOpened()) {
+        cerr << "错误：无法打开视频文件！" << endl;
+        cerr << "请检查文件路径: " << path << endl;
+        return -1;
+    }
+
+    namedWindow("能量机关识别", WINDOW_AUTOSIZE);
+    setMouseCallback("能量机关识别", onMouse, NULL);
+
+    cout << "=== Ubuntu 能量机关识别系统 ===" << endl;
+    cout << "操作说明：" << endl;
+    cout << "1. 在视频窗口中点击设置R标中心" << endl;
+    cout << "2. 程序会自动识别最外层亮起的扇叶" << endl;
+    cout << "3. 绿色矩形框表示识别到的扇叶" << endl;
+    cout << "4. 青色圆圈围绕扇叶中心" << endl;
+    cout << "5. 按空格键暂停/播放" << endl;
+    cout << "6. 按Q键退出程序" << endl;
+
+    bool paused = false;
+    
+    while (true) {
+        if (!paused) {
+            cap.read(img);
+            if (img.empty()) {
+                cout << "视频播放结束！" << endl;
+                break;
+            }
+            
+            // 原视频窗格太大了,连大符都看不见
+            resize(img, src, Size(img.cols / 3, img.rows / 3));
+            
+            // 自定义函数进行识别
+            markred(src);
+        }
+        
+        imshow("能量机关识别", src);
+        
+        // 按键处理
+        int key = waitKey(30);
+        switch (key) {
+            case 'q':
+            case 'Q':
+                cout << "退出程序..." << endl;
+                cap.release();
+                destroyAllWindows();
+                return 0;
+            case ' ':
+                paused = !paused;
+                cout << (paused ? "已暂停" : "继续播放") << endl;
+                break;
+            case 'f':
+            case 'F':
+                // 逐帧播放
+                paused = true;
+                cout << "逐帧模式" << endl;
+                break;
+        }
+    }
+    
+    cap.release();
+    destroyAllWindows();
+    return 0;
+}
